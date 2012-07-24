@@ -1,286 +1,250 @@
+"""
+Bomberman emulation made in Hacker School.
+Not intended to infringe on any copyrights.
+Made in the interest of improving my programming and as an ode to Bomberman.
+-Dillon 23 July 2012
+"""
 #!/usr/bin/python
-"""
-
-Insert comments here.
-
-"""
-
 
 import pygame, sys, os
 from pygame.locals import *
+from pprint import pprint
 
+# Game constants and global variables
 debug = True
-BLOCK_WIDTH = 40 # pixels
-N_BLOCKS_ACR = 8 # should be even number
-N_BLOCKS_DOWN = 6 # should be even number
-AISLE_BUFFER = 10 # = total aisle width - block width (in pixels)
-aisle_width = BLOCK_WIDTH + AISLE_BUFFER
-game_width = N_BLOCKS_ACR*BLOCK_WIDTH + (N_BLOCKS_ACR+1)*(aisle_width)
-game_height = N_BLOCKS_DOWN*BLOCK_WIDTH + (N_BLOCKS_DOWN+1)*(aisle_width)
-RADIUS = 10
-# ROOT = os.path.dirname(os.path.abspath(sys.argv[0]))
-# Arena
-block_array = []
-for x in range(N_BLOCKS_ACR):
-	block_array.append([])
-	for y in range(N_BLOCKS_DOWN):
-		x_pos = x*BLOCK_WIDTH + (x+1)*(aisle_width)
-		y_pos = y*BLOCK_WIDTH + (y+1)*(aisle_width)
-		block_array[x].append((x_pos,y_pos))
-# Bomb array
-bomb_row = [ (-RADIUS, aisle_width), (-RADIUS+aisle_width, BLOCK_WIDTH) ]
-bomb_col = [ (-RADIUS, aisle_width), (-RADIUS+aisle_width, BLOCK_WIDTH) ]
-bomb_array = []
-for x in range(N_BLOCKS_ACR*2-1):
-	bomb_row.append( (bomb_row[-1][0]+bomb_row[-1][1], bomb_row[-2][1]) )
-for y in range(N_BLOCKS_DOWN*2-1):
-	bomb_col.append( (bomb_col[-1][0]+bomb_col[-1][1], bomb_col[-2][1]) )	
-for x in bomb_row:
-	bomb_array.append([])
-	for y in bomb_col:
-		bomb_array[-1].append( ( x[0],y[0],x[1],y[1] ) )
-# Colors
+b = 40 # pixel width for one block
+NB_ACR = 8 # number blocks across -- should be an even number
+NB_DOWN = 6 # number blocks down -- should be an even number
+game_width = b * (NB_ACR * 2 + 1)
+game_height = b * (NB_DOWN * 2 + 1)
+
+#  Colors
 BLACK = (0,0,0)
 BLUE = (0,0,255)
 WHITE = (255,255,255)
 DARK_GREY = (140,140,140)
 ORANGE = (255,108,10)
 BG_COLOR = BLACK
-# Bomberman stats
-pos = (0,0) # starting position
-MOVEMENT = 3 # walking speed
-# Bomb specs
-BOMB_LIFE = 150
-EXPLOSION_LIFE = 30
-EXPLOSION_RADIUS = 8 # tiles, not pixels
-MAX_BOMBS = 3
-BOMB_RESET = 10
-bomb_reset_timer = 0
-bomb_inventory = []
-for blah in range(MAX_BOMBS):
-	bomb_inventory.append([0,0,0,0]) #bomb_timer,explosion_timer,bomb.x,bomb.y
 
-def isYMovementOkay(x,y):
-	if y < 0: return False
-	if y >= 0 and y <= aisle_width - 2*RADIUS: return True
-	if y >= game_height - 2*RADIUS: return False
-    # make sure x_pos is proper
-	if x <= aisle_width - 2*RADIUS: return True
-	for row in block_array:
-		if x>=BLOCK_WIDTH+row[0][0] and x<=BLOCK_WIDTH+row[0][0]+aisle_width-2*RADIUS:
-			return True
-		else:
-			for column in block_array[0]:
-				if y>=BLOCK_WIDTH+column[1] and (y<=BLOCK_WIDTH+column[1]+
-					aisle_width-2*RADIUS):
-					return True			
-	else: return False
+class IterRegistry(type):
+	def __iter__(cls):
+		return iter(cls._registry)
 
-def isXMovementOkay(x,y):
-	if x <= 0: return False
-	if x >= 0 and x <= aisle_width - 2*RADIUS: return True
-	if x >= game_width - 2*RADIUS: return False
-	# make sure y_pos is proper
-	if y <= aisle_width - 2*RADIUS: return True
-	for column in block_array[0]:
-		if y>=BLOCK_WIDTH+column[1] and y<=BLOCK_WIDTH+column[1]+aisle_width-2*RADIUS:
-			return True
-		else:
-			for row in block_array:
-				if x>=BLOCK_WIDTH+row[0][0] and (x<=BLOCK_WIDTH+row[0][0]+
-					aisle_width-2*RADIUS):
-					return True
-	else: return False
 
-window = pygame.display.set_mode((game_width,game_height))
-
+window = pygame.display.set_mode( (game_width,game_height) )
 class Game():
 	def __init__(self):
 		pygame.init()
 		pygame.display.set_caption("Bomberman by Dillon Forrest")
-		self.arena = Arena()
-		self.bomberman = Bomberman()
-		
-	def keyboardEvents(self, bomberman):
-		keys = pygame.key.get_pressed()
-		if keys[pygame.K_UP]:
-			bomberman.moveUp()
-		elif keys[pygame.K_DOWN]:
-			bomberman.moveDown()
-		elif keys[pygame.K_LEFT]:
-			bomberman.moveLeft()
-		elif keys[pygame.K_RIGHT]:
-			bomberman.moveRight()
-		elif keys[pygame.K_SPACE]:
-			self.bomb = Bomb()
-			return "bomb"
+		self.bbman = Bomberman()
+		self.arena = Arena(self.bbman)
 
 	def mainLoop(self):
-		global bomb_reset_timer
 		while True:
 			for event in pygame.event.get():
-				if event.type == QUIT:
-					sys.exit()
-			self.draw(self.arena, self.bomberman)
-			self.keyboardEvents(self.bomberman)
-			if bomb_reset_timer > 0: bomb_reset_timer -= 1
-			if self.keyboardEvents(self.bomberman) == "bomb":
-				if self.bomb.isEmptyTile(self.bomberman.x,self.bomberman.y,bomb_inventory):
-					if bomb_reset_timer <= 0:
-						bomb_reset_timer = BOMB_RESET
-						for i, bomb_spec in enumerate(bomb_inventory):
-							if bomb_spec[0] == 0 and bomb_spec[1] == 0:
-								bomb_inventory[i][0] = BOMB_LIFE
-								bomb_inventory[i][2] = self.bomberman.x
-								bomb_inventory[i][3] = self.bomberman.y
-								break
-			for i, bomb_spec in enumerate(bomb_inventory):
-				if bomb_spec[0] > 0:
-					self.bomb.drawBomb(bomb_spec[2],bomb_spec[3])
-					bomb_inventory[i][0] -= 1
-					if bomb_inventory[i][0] <= 0:
-						bomb_inventory[i][1] = EXPLOSION_LIFE
-				if bomb_spec[1] > 0:
-					self.bomb.drawExplosion(bomb_spec[2],bomb_spec[3])
-					bomb_inventory[i][1] -= 1
-			pygame.display.flip()
+				if event.type == QUIT: sys.exit()
+			self.bbman.processKeyboardEvents(self.arena)
+			self.processBombs()
+			self.updateGameStats(Bomb, Explosion)
+			self.draw()
 	
-	def draw(self, arena, bomberman):
+	def processBombs(self):
+		for explosion in Explosion:
+			if explosion.life > 0: explosion.life -= 1
+		for bomb in Bomb:
+			if bomb.life > 0:
+				bomb.life -= 1
+				if bomb.life == 0: Explosion(bomb, self.arena)
+
+	def updateGameStats(self, Bomb, Explosion):
+		Bomb = [bomb for bomb in Bomb if bomb.life > 0]
+		for player in Bomberman:
+			player.bombs = len( [bomb for bomb in Bomb if bomb.owner==player] )
+			if player.bomb_reset > 0: player.bomb_reset -= 1
+		Explosion = [expl for expl in Explosion if expl.life > 0]
+
+	def draw(self):
 		window.fill(BG_COLOR)
-		arena.drawBlocks()
-		bomberman.drawBomberman()
-		
+		window.lock()
+		self.arena.drawArena()
+		self.bbman.drawBomberman()
+		for bomb in Bomb:
+			if bomb.life > 0:	bomb.drawBomb()
+		for explosion in Explosion:
+			if explosion.life > 0: explosion.drawExplosion()
+		window.unlock()
+		pygame.display.flip()
+
 class Bomberman():
-	def __init__(self):
-		self.x = pos[0]
-		self.y = pos[1]
+	__metaclass__ = IterRegistry
+	_registry = []
 
-	def moveUp(self):
-		if isYMovementOkay(self.x,self.y-MOVEMENT):
-			self.y -= MOVEMENT
-	def moveDown(self):
-		if isYMovementOkay(self.x,self.y+MOVEMENT):
-			self.y += MOVEMENT
-	def moveLeft(self):
-		if isXMovementOkay(self.x-MOVEMENT,self.y):
-			self.x -= MOVEMENT
-	def moveRight(self):
-		if isXMovementOkay(self.x+MOVEMENT,self.y):
-			self.x += MOVEMENT
+	def __init__(self):
+		self._registry.append(self)
+		self.radius = 10
+		self.x, self.y = self.radius, self.radius # initial position
+		self.w = 2*self.radius
+		self.speed = 3 # I think this is pixels per frame
+		self.bombs = 0
+		self.bomb_max = 3
+		self.bomb_reset = 0
+		self.reset_amt = 10 # frames
+
+	def isUpDownOkay(self, x, y, arena):
+		w, r = self.w, self.radius
+		hz, vt = arena.hz_aisles, arena.vt_aisles
+		if y < 0+r or y >= game_height-w+r: return False
+		# make sure x position is okay
+		for aisle in hz:
+			if aisle[0] <= x <= aisle[1] - w: return True
+			else:
+				for aisle in vt:
+					if aisle[0] <= y <= aisle[1] - w: return True
+		else: return False
 		
+	def isLeftRightOkay(self, x, y, arena):
+		w = self.w; r = self.radius
+		hz = arena.hz_aisles; vt = arena.vt_aisles
+		if x < 0+r or x >= game_width-w+r: return False
+		# make sure y position is okay
+		for aisle in vt:
+			if aisle[0] <= y <= aisle[1] - w: return True
+			else:
+				for aisle in hz:
+					if aisle[0] <= x <= aisle[1] - w: return True
+		else:	return False
+
+	def isMovementOkay(self, move, arena):
+		w, r = self.w, self.radius
+		hz, vt = arena.hz_aisles, arena.vt_aisles
+		for new,game,aisles,rev_aisles,rev_new in ( 
+			(move[0], game_width, hz, vt, move[1]),	
+			(move[1], game_height, vt, hz, move[0]) ):
+			if  new < r or new > game-r: return False
+			for aisle in aisles:
+				if aisle[0] <= new <= aisle[1]-w: return True
+				else:
+					for aisle in rev_aisles:
+						if aisle[0] <= rev_new <= aisle[1]-w: return True
+			else: return False
+	
+	def processKeyboardEvents(self, arena):
+		keys = pygame.key.get_pressed()
+		x, y, s = self.x, self.y, self.speed
+		if keys[pygame.K_UP]:
+			if self.isMovementOkay( (x,y-s), arena): self.y -= s
+		elif keys[pygame.K_DOWN]:
+			if self.isMovementOkay( (x,y+s), arena): self.y += s
+		elif keys[pygame.K_LEFT]:
+			if self.isMovementOkay( (x-s,y), arena): self.x -= s
+		elif keys[pygame.K_RIGHT]:
+			if self.isMovementOkay( (x+s,y), arena): self.x += s
+		elif keys[pygame.K_SPACE]: self.dropBomb(arena)
+
+
+	def dropBomb(self, arena):
+		if self.bomb_reset == 0:
+			if self.bombs < self.bomb_max:
+				Bomb(self, arena)
+				self.bomb_reset = self.reset_amt
+
 	def drawBomberman(self):
-		window.lock()
-		pygame.draw.circle(window, WHITE, (self.x+RADIUS,self.y+RADIUS), RADIUS)
-		window.unlock()
-		
-class Bomb():
-	def __init__(self):
-		pass
-		
-	def findBombPos(self, x_pos, y_pos):
-		for row in bomb_array:
-			if x_pos > row[0][0] and x_pos <= row[0][0]+row[0][2]:
-				for col in row:
-					if y_pos > col[1] and y_pos <= col[1]+col[3]:
-						return col[0]+col[2]/2+RADIUS,col[1]+col[3]/2+RADIUS,col[2],col[3]
+		pygame.draw.circle(window, WHITE, (self.x, self.y),	self.radius)
 
-	def drawBomb(self,x,y):
-		center_x, center_y, tile_width, tile_height = self.findBombPos(x,y)
-		window.lock()
-		pygame.draw.circle(window, DARK_GREY, (center_x, center_y), BLOCK_WIDTH/2)
-		window.unlock()
-		
-	def isEmptyTile(self,bbman_x,bbman_y,bomb_list):
-		results = self.findBombPos(bbman_x,bbman_y)
-		x,y = results[0],results[1]
-		for bomb in bomb_list:
-			if bomb[0] != 0:
-				container = self.findBombPos(bomb[2],bomb[3])
-				if container[0] == x and container[1] == y:
-					return False
-		else: return True
-		
-	def explosionArea(self,x,y):
-		center_x, center_y, tile_width, tile_height = self.findBombPos(x,y)
-		if tile_width == aisle_width and tile_height == aisle_width:
-			hz_top = center_y - aisle_width/2
-			hz_height = aisle_width
-			vt_left = center_x - aisle_width/2
-			vt_width = aisle_width
-			hz_left = center_x-aisle_width/2 - EXPLOSION_RADIUS/2*(aisle_width+
-				BLOCK_WIDTH) - BLOCK_WIDTH*(EXPLOSION_RADIUS%2)
-			vt_top = center_y-aisle_width/2 - EXPLOSION_RADIUS/2*(aisle_width+
-				BLOCK_WIDTH) - BLOCK_WIDTH*(EXPLOSION_RADIUS%2)
-			hz_width = (center_x - hz_left) * 2
-			vt_height = (center_y - vt_top) * 2
-		if tile_width == aisle_width and tile_height == BLOCK_WIDTH:
-			hz_left = hz_top = hz_width = hz_height = 0
-			vt_left = center_x - aisle_width/2
-			vt_width = aisle_width
-			vt_top = center_y-BLOCK_WIDTH/2 - EXPLOSION_RADIUS/2*(aisle_width+
-				BLOCK_WIDTH) - aisle_width*(EXPLOSION_RADIUS%2)
-			vt_height = (center_y - vt_top) * 2
-		if tile_width == BLOCK_WIDTH and tile_height == aisle_width:
-			vt_left = vt_top = vt_width = vt_height = 0
-			hz_top = center_y - aisle_width/2
-			hz_height = aisle_width
-			hz_left = center_x - BLOCK_WIDTH/2 - EXPLOSION_RADIUS/2*(aisle_width+
-				BLOCK_WIDTH) - aisle_width*(EXPLOSION_RADIUS%2)
-			hz_width = (center_x - hz_left) * 2
-		return hz_left,hz_top,hz_width,hz_height,vt_left,vt_top,vt_width,vt_height
+class Bomb():
+	__metaclass__ = IterRegistry
+	_registry = []
+
+	def __init__(self, bbman, arena):
+		self._registry.append(self)
+		self.life = 150 # frames
+		self.radius = 20 # pixels
+		self.color = DARK_GREY
+		self.x, self.y = self.findBombPos(bbman, arena)
+		self.owner = bbman
+
+	def findBombPos(self, bbman, arena):
+		bbx = bbman.x + bbman.radius; bby = bbman.y + bbman.radius
+		pos = [0,0]
+		hz_tiles = arena.bombx; vt_tiles = arena.bomby
+		for tiles, bb, n in ( (hz_tiles,bbx,0), (vt_tiles,bby,1) ):
+			for tile in tiles:
+				if tile[0] < bb <= tile[1]: pos[n] = sum(tile)/len(tile)
+		return pos[0], pos[1]
+
+	def drawBomb(self):
+		pygame.draw.circle(window, self.color, (self.x,self.y), self.radius)
+
+class Explosion():
+	__metaclass__ = IterRegistry
+	_registry = []
+
+	def __init__(self, bomb, arena):
+		self._registry.append(self)
+		self.x, self.y = bomb.x, bomb.y
+		self.radius = 8 # tiles, not pixels
+		self.area = self.findExplArea(arena)
+		self.life = 30 # frames
+		self.arena = arena
+		# the self.arena attribute is necessary to recursively
+		# instantiate more explosions within the Explosion class
+
+	def findExplArea(self, arena):
+		typee = self.find2or4WayExpl(arena)
+		r = self.radius
+		full, half, short = (r*2 + 1)*b, (r+0.5)*b, (0.5*b)
+		if typee == '2-way hz':
+			hz_blast, vt_blast = ( self.x-half,self.y-short,full,b ), (0,0,0,0)
+		elif typee == '2-way vt':
+			hz_blast, vt_blast = (0,0,0,0), ( self.x-short,self.y-half,b,full )
+		else: # typee == '4-way':
+			hz_blast = ( self.x-half,self.y-short,full,b )
+			vt_blast = ( self.x-short,self.y-half,b,full )
+		return hz_blast, vt_blast
 	
-	def isInArea(self,area,x,y):
-		hz_leftbound = area[0]; hz_rightbound = area[0]+area[2]
-		hz_upperbound = area[1]; hz_lowerbound = area[1]+area[3]
-		vt_leftbound = area[4]; vt_rightbound = area[4]+area[6]
-		vt_upperbound = area[5]; vt_lowerbound = area[5]+area[7]
-		if x >= hz_leftbound and x <= hz_rightbound:
-			if y >= hz_upperbound and y <= hz_lowerbound:
+	def find2or4WayExpl(self, arena):
+		x, y, path = self.x, self.y, [0,0]
+		for aisles,center,p in ( (arena.bombx,x,1),(arena.bomby,y,0) ):
+			for n in aisles:
+				if n[0] < center < n[1]:
+					if aisles.index(n) % 2 == 0: path[p] = 'open'
+					else: path[p] = 'closed'
+		if path[0] == 'open' and path[1] == 'open': return '4-way'
+		elif path[0] == 'open' and path[1] == 'closed': return '2-way hz'
+		elif path[0] == 'closed' and path[1] == 'open': return '2-way vt'
+
+	def isInExplArea(self, bomb):
+		for blast in self.area:
+			if blast[0] < bomb.x <= blast[0]+blast[2] \
+				and blast[1] < bomb.y <= blast[1]+blast[3]:
 				return True
-		if x >= vt_leftbound and x <= vt_rightbound:
-			if y >= vt_upperbound and y <= vt_lowerbound:
-				return True
-		else: 
-			return False
-		
-	def findNearbyBombs(self, bomb_x, bomb_y):
-		area = self.explosionArea(bomb_x,bomb_y)
-		exploding_list = []
-		for bomb in bomb_inventory:
-			if bomb[0] > 0:
-				if self.isInArea(area,bomb[2],bomb[3]):
-					exploding_list.append(bomb)
-		return exploding_list
-	
-	def drawExplosion(self,x,y):
-		area = self.explosionArea(x,y)
-		window.lock()
-		pygame.draw.rect(window, ORANGE, (area[0],area[1],area[2],area[3]))
-		pygame.draw.rect(window, ORANGE, (area[4],area[5],area[6],area[7]))
-		window.unlock()
-		position = self.findBombPos(x,y)
-		more_explosions = self.findNearbyBombs(position[0],position[1])
-		# change bomb_inventory to address side bombs exploding
-		for explosion in more_explosions:
-			for i, bomb in enumerate(bomb_inventory):
-				if explosion[2] == bomb[2] and explosion[3] == bomb[3]:
-					bomb_inventory[i][0] = 0
-					bomb_inventory[i][1] = EXPLOSION_LIFE
-		for i, explosion in enumerate(more_explosions):
-			if explosion[0] > 0:
-				self.drawExplosion(explosion[2],explosion[3])
+
+	def findNearbyBombs(self):
+		return [bomb for bomb in Bomb if self.isInExplArea(bomb)]
+
+	def drawExplosion(self):
+		for i in range(2): pygame.draw.rect(window, ORANGE, self.area[i])
+		more_exploding_bombs = self.findNearbyBombs()
+		for bomb in more_exploding_bombs:
+			if bomb.life > 0:
+				bomb.life = 0
+				Explosion(bomb, self.arena)
 
 class Arena():
-	def __init__(self):
-		pass
-	def drawBlocks(self):
-		window.lock()
-		for x in range(N_BLOCKS_ACR):
-			for y in range(N_BLOCKS_DOWN):
-				pygame.draw.rect(window, BLUE,
-					pygame.Rect(block_array[x][y], (BLOCK_WIDTH,BLOCK_WIDTH) ))
-		window.unlock()
-					
+	def __init__(self, bbman):
+		self.array = [ [ ( b*(2*x+1),b*(2*y+1) ) for y in range(NB_DOWN) ] \
+			for x in range(NB_ACR) ]
+		r = bbman.radius
+		self.hz_aisles = [ ( 2*x*b+r,(2*x+1)*b+r ) for x in range(NB_ACR+1) ]
+		self.vt_aisles = [ ( 2*y*b+r,(2*y+1)*b+r ) for y in range(NB_ACR+1) ]
+		# self.bombi = ( start of tile, end of tile, index of tile )
+		self.bombx = [ ( b*x, b*(x+1) ) for x in range(2*NB_ACR + 1) ]
+		self.bomby = [ ( b*y, b*(y+1) ) for y in range(2*NB_DOWN + 1) ]
+	def drawArena(self):
+		for x in range(NB_ACR):
+			for y in range(NB_DOWN):
+				pygame.draw.rect(window, BLUE, pygame.Rect(self.array[x][y],(b,b)))
+
 if __name__ == '__main__':
 	game = Game()
 	game.mainLoop()

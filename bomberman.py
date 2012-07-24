@@ -79,7 +79,7 @@ class Bomberman():
 	__metaclass__ = IterRegistry
 	_registry = []
 
-	def __init__(self):
+	def __init__(self, arena):
 		self._registry.append(self)
 		self.radius = 10
 		self.x, self.y = self.radius, self.radius # initial position
@@ -90,31 +90,7 @@ class Bomberman():
 		self.bomb_reset = 0
 		self.reset_amt = 10 # frames
 
-	def isUpDownOkay(self, x, y, arena):
-		w, r = self.w, self.radius
-		hz, vt = arena.hz_aisles, arena.vt_aisles
-		if y < 0+r or y >= game_height-w+r: return False
-		# make sure x position is okay
-		for aisle in hz:
-			if aisle[0] <= x <= aisle[1] - w: return True
-			else:
-				for aisle in vt:
-					if aisle[0] <= y <= aisle[1] - w: return True
-		else: return False
-		
-	def isLeftRightOkay(self, x, y, arena):
-		w = self.w; r = self.radius
-		hz = arena.hz_aisles; vt = arena.vt_aisles
-		if x < 0+r or x >= game_width-w+r: return False
-		# make sure y position is okay
-		for aisle in vt:
-			if aisle[0] <= y <= aisle[1] - w: return True
-			else:
-				for aisle in hz:
-					if aisle[0] <= x <= aisle[1] - w: return True
-		else:	return False
-
-	def isMovementOkay(self, move, arena):
+	def isMoveOkay(self, move, arena):
 		w, r = self.w, self.radius
 		hz, vt = arena.hz_aisles, arena.vt_aisles
 		for new,game,aisles,rev_aisles,rev_new in ( 
@@ -128,19 +104,19 @@ class Bomberman():
 						if aisle[0] <= rev_new <= aisle[1]-w: return True
 			else: return False
 	
+	# how can I make this function prettier??  o_O
 	def processKeyboardEvents(self, arena):
 		keys = pygame.key.get_pressed()
 		x, y, s = self.x, self.y, self.speed
-		if keys[pygame.K_UP]:
-			if self.isMovementOkay( (x,y-s), arena): self.y -= s
-		elif keys[pygame.K_DOWN]:
-			if self.isMovementOkay( (x,y+s), arena): self.y += s
-		elif keys[pygame.K_LEFT]:
-			if self.isMovementOkay( (x-s,y), arena): self.x -= s
-		elif keys[pygame.K_RIGHT]:
-			if self.isMovementOkay( (x+s,y), arena): self.x += s
-		elif keys[pygame.K_SPACE]: self.dropBomb(arena)
-
+		if keys[pygame.K_SPACE]: self.dropBomb(arena)
+		elif keys[pygame.K_UP]    and self.isMoveOkay( (x,y-s), arena ):
+			self.y -= s
+		elif keys[pygame.K_DOWN]  and self.isMoveOkay( (x,y+s), arena ):
+			self.y += s
+		elif keys[pygame.K_LEFT]  and self.isMoveOkay( (x-s,y), arena ):
+			self.x -= s
+		elif keys[pygame.K_RIGHT] and self.isMoveOkay( (x+s,y), arena ):
+			self.x += s
 
 	def dropBomb(self, arena):
 		if self.bomb_reset == 0:
@@ -209,9 +185,9 @@ class Explosion():
 				if n[0] < center < n[1]:
 					if aisles.index(n) % 2 == 0: path[p] = 'open'
 					else: path[p] = 'closed'
-		if path[0] == 'open' and path[1] == 'open': return '4-way'
-		elif path[0] == 'open' and path[1] == 'closed': return '2-way hz'
-		elif path[0] == 'closed' and path[1] == 'open': return '2-way vt'
+		if   path[0] == 'open'   and path[1] == 'open':   return '4-way'
+		elif path[0] == 'open'   and path[1] == 'closed': return '2-way hz'
+		elif path[0] == 'closed' and path[1] == 'open':   return '2-way vt'
 
 	def isInExplArea(self, bomb):
 		for blast in self.area:
@@ -240,6 +216,7 @@ class Arena():
 		# self.bombi = ( start of tile, end of tile, index of tile )
 		self.bombx = [ ( b*x, b*(x+1) ) for x in range(2*NB_ACR + 1) ]
 		self.bomby = [ ( b*y, b*(y+1) ) for y in range(2*NB_DOWN + 1) ]
+	
 	def drawArena(self):
 		for x in range(NB_ACR):
 			for y in range(NB_DOWN):

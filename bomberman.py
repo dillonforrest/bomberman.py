@@ -40,9 +40,9 @@ class Game():
 		pygame.display.set_caption("Bomberman by Dillon Forrest")
 		self.arena = Arena()
 		self.bbman = Bomberman(self.arena, WHITE, self.arena.start0)
-		self.enemy1 = Bomberman(self.arena, PINK, self.arena.start1)
-		self.enemy2 = Bomberman(self.arena, GREEN, self.arena.start2)
-		self.enemy3 = Bomberman(self.arena, YELLOW, self.arena.start3)
+		self.enemy1 = AIBot(self.arena, PINK, self.arena.start1)
+		self.enemy2 = AIBot(self.arena, GREEN, self.arena.start2)
+		self.enemy3 = AIBot(self.arena, YELLOW, self.arena.start3)
 
 	def mainLoop(self):
 		while True:
@@ -50,7 +50,8 @@ class Game():
 				if event.type == QUIT: sys.exit()
 			self.bbman.processKeyboardEvents(self.arena)
 			self.processBombs()
-			self.updateGameStats(Bomb, Explosion)
+			self.killBombermen(Bomberman, Explosion)
+			self.updateGameStats(Bomb, Explosion, Bomberman)
 			self.draw()
 	
 	def processBombs(self):
@@ -61,19 +62,41 @@ class Game():
 				bomb.life -= 1
 				if bomb.life == 0: Explosion(bomb, self.arena)
 
-	def updateGameStats(self, Bomb, Explosion):
-		Bomb = [bomb for bomb in Bomb if bomb.life > 0]
+	def killBombermen(self, Bomberman, Explosion):
+		for bbman in Bomberman:
+			for expl in Explosion:
+				if expl.isInExplArea(bbman):
+					if bbman.alive == True:
+						print "lul you killed him"					
+						bbman.alive = False
+
+	def updateGameStats(self, Bomb, Explosion, Bomberman):
+		Bomb._registry = [bomb for bomb in Bomb if bomb.life > 0]
 		for player in Bomberman:
 			player.bombs = len( [bomb for bomb in Bomb if bomb.owner==player] )
 			if player.bomb_reset > 0: player.bomb_reset -= 1
-		Explosion = [expl for expl in Explosion if expl.life > 0]
-
+		Explosion._registry = [expl for expl in Explosion if expl.life > 0]
+		# add game-over logic
+		count = 0
+		winner = None 
+		for player in Bomberman._registry:
+			if player.alive:
+				count += 1
+				winner = player
+		if count == 0:
+			print("Draw!")
+			sys.exit()
+		elif count == 1:
+			print("Player", player, "has won!")
+			sys.exit()
+			
 	def draw(self):
 		window.fill(BG_COLOR)
 		window.lock()
 		self.arena.drawArena()
 		for bomberman in Bomberman:
-			bomberman.drawBomberman()
+			if bomberman.alive:
+				bomberman.drawBomberman()
 		for bomb in Bomb:
 			if bomb.life > 0:	bomb.drawBomb()
 		for explosion in Explosion:
@@ -96,6 +119,7 @@ class Bomberman():
 		self.bomb_reset = 0
 		self.reset_amt = 10 # frames
 		self.color = color
+		self.alive = True
 
 	def isInBounds(self, move):
 		r = self.radius
@@ -128,22 +152,6 @@ class Bomberman():
 			else:
 				return True
 		else: return True
-
-	def LALAisMoveOkay(self, move, arena):
-		w, r = self.w, self.radius
-		hz, vt = arena.hz_aisles, arena.vt_aisles
-		print move[1], r, game_height-r
-		for new, game, aisles, revr_aisles, revr_new in ( 
-			(move[0], game_width, hz, vt, move[1]),	
-			(move[1], game_height, vt, hz, move[0]) ):
-			print new, game
-			if  new < r or new > game-r: return False
-			for aisle in aisles:
-				if aisle[0] <= new <= aisle[1]-w: return True
-				else:
-					for aisle in revr_aisles:
-						if aisle[0] <= revr_new <= aisle[1]-w: return True
-			else: return False
 	
 	def processKeyboardEvents(self, arena):
 		keys = pygame.key.get_pressed()
@@ -157,19 +165,6 @@ class Bomberman():
 			self.x -= s
 		elif keys[pygame.K_RIGHT] and self.isMoveOkay( (x+s,y), (x,y), arena ):
 			self.x += s
-	# how can I make this function prettier??  o_O
-	def LALAprocessKeyboardEvents(self, arena): 
-		keys = pygame.key.get_pressed()
-		x, y, s = self.x, self.y, self.speed
-		if keys[pygame.K_SPACE]: self.dropBomb(arena)
-		elif keys[pygame.K_UP]    and self.isMoveOkay( (x,y-s), arena ):
-			self.y -= s
-		elif keys[pygame.K_DOWN]  and self.isMoveOkay( (x,y+s), arena ):
-			self.y += s
-		elif keys[pygame.K_LEFT]  and self.isMoveOkay( (x-s,y), arena ):
-			self.x -= s
-		elif keys[pygame.K_RIGHT] and self.isMoveOkay( (x+s,y), arena ):
-			self.x += s
 
 	def dropBomb(self, arena):
 		if self.bomb_reset == 0:
@@ -179,6 +174,11 @@ class Bomberman():
 
 	def drawBomberman(self):
 		pygame.draw.circle(window, self.color, (self.x, self.y),	self.radius)
+
+class AIBot(Bomberman):
+	pass
+
+
 
 class Bomb():
 	__metaclass__ = IterRegistry

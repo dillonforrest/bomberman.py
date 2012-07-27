@@ -6,7 +6,7 @@ Made in the interest of improving my programming and as an ode to Bomberman.
 """
 #!/usr/bin/python
 
-import pygame, sys, os
+import pygame, sys, os, random
 from pygame.locals import *
 from pprint import pprint
 
@@ -39,20 +39,27 @@ class Game():
 		pygame.init()
 		pygame.display.set_caption("Bomberman by Dillon Forrest")
 		self.arena = Arena()
-		self.bbman = Bomberman(self.arena, WHITE, self.arena.start0)
-		self.enemy1 = AIBot(self.arena, PINK, self.arena.start1)
-		self.enemy2 = AIBot(self.arena, GREEN, self.arena.start2)
-		self.enemy3 = AIBot(self.arena, YELLOW, self.arena.start3)
+		self.players = [
+			Bomberman(self.arena, WHITE, self.arena.start0),
+			AIBot(self.arena, PINK, self.arena.start1),
+			AIBot(self.arena, GREEN, self.arena.start2),
+			AIBot(self.arena, YELLOW, self.arena.start3),
+		]
 
 	def mainLoop(self):
 		while True:
 			for event in pygame.event.get():
 				if event.type == QUIT: sys.exit()
-			self.bbman.processKeyboardEvents(self.arena)
+			self.players[0].processKeyboardEvents(self.arena)
+			self.updateBots(AIBot)
 			self.processBombs()
-			self.killBombermen(Bomberman, Explosion)
-			self.updateGameStats(Bomb, Explosion, Bomberman)
+			self.killBombermen(Explosion)
+			self.updateGameStats(Bomb, Explosion)
 			self.draw()
+
+	def updateBots(self, AIBot):
+		for bot in AIBot:
+			bot.update()
 	
 	def processBombs(self):
 		for explosion in Explosion:
@@ -62,24 +69,24 @@ class Game():
 				bomb.life -= 1
 				if bomb.life == 0: Explosion(bomb, self.arena)
 
-	def killBombermen(self, Bomberman, Explosion):
-		for bbman in Bomberman:
+	def killBombermen(self, Explosion):
+		for bbman in self.players:
 			for expl in Explosion:
 				if expl.isInExplArea(bbman):
 					if bbman.alive == True:
 						print "lul you killed him"					
 						bbman.alive = False
 
-	def updateGameStats(self, Bomb, Explosion, Bomberman):
+	def updateGameStats(self, Bomb, Explosion):
 		Bomb._registry = [bomb for bomb in Bomb if bomb.life > 0]
-		for player in Bomberman:
+		for player in self.players:
 			player.bombs = len( [bomb for bomb in Bomb if bomb.owner==player] )
 			if player.bomb_reset > 0: player.bomb_reset -= 1
 		Explosion._registry = [expl for expl in Explosion if expl.life > 0]
 		# add game-over logic
 		count = 0
 		winner = None 
-		for player in Bomberman._registry:
+		for player in self.players:
 			if player.alive:
 				count += 1
 				winner = player
@@ -94,7 +101,7 @@ class Game():
 		window.fill(BG_COLOR)
 		window.lock()
 		self.arena.drawArena()
-		for bomberman in Bomberman:
+		for bomberman in self.players:
 			if bomberman.alive:
 				bomberman.drawBomberman()
 		for bomb in Bomb:
@@ -120,6 +127,7 @@ class Bomberman():
 		self.reset_amt = 10 # frames
 		self.color = color
 		self.alive = True
+		self.arena = arena
 
 	def isInBounds(self, move):
 		r = self.radius
@@ -172,13 +180,41 @@ class Bomberman():
 				Bomb(self, arena)
 				self.bomb_reset = self.reset_amt
 
+	def update(self):
+		pass
+
 	def drawBomberman(self):
 		pygame.draw.circle(window, self.color, (self.x, self.y),	self.radius)
 
 class AIBot(Bomberman):
-	pass
 
+	#movedict = {'nothing': (0,0), 'north': (0,-1), 'east': (1,0),
+	#	'south': (0,1), 'west': (-1,0) }
 
+	movedict = [(0,-1),(1,0),(0,1),(-1,0)]
+
+	def __init__(self, arena, color, pos):
+		Bomberman.__init__(self, arena, color, pos)
+		self.direction = random.choice(self.movedict)
+		
+	def update(self):
+		if random.randint(1, 100) == 100:
+			self.direction = random.choice(self.movedict)
+		if random.randint(1, 100) == 100:
+			pass
+			self.dropBomb(self.arena)
+		movex = self.direction[0] * self.speed
+		movey = self.direction[1] * self.speed
+		for _ in range(10):
+			if self.isMoveOkay((self.x+movex, self.y+movey),
+			                   (self.x,self.y), self.arena):
+				self.x += movex
+				self.y += movey
+				break
+			else:
+				self.direction = random.choice(self.movedict)
+		for expl in Explosion:
+			if 
 
 class Bomb():
 	__metaclass__ = IterRegistry

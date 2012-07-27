@@ -70,12 +70,12 @@ class Game():
 				if bomb.life == 0: Explosion(bomb, self.arena)
 
 	def killBombermen(self, Explosion):
-		for bbman in self.players:
+		for player in self.players:
 			for expl in Explosion:
-				if expl.isInExplArea(bbman):
-					if bbman.alive == True:
+				if expl.isInExplArea(player.x, player.y):
+					if player.alive == True:
 						print "lul you killed him"					
-						bbman.alive = False
+						player.alive = False
 
 	def updateGameStats(self, Bomb, Explosion):
 		Bomb._registry = [bomb for bomb in Bomb if bomb.life > 0]
@@ -214,7 +214,8 @@ class AIBot(Bomberman):
 			else:
 				self.direction = random.choice(self.movedict)
 		for expl in Explosion:
-			if 
+			if expl.isInExplArea(self.x, self.y):
+				self.direction = random.choice(self.movedict)
 
 class Bomb():
 	__metaclass__ = IterRegistry
@@ -278,14 +279,14 @@ class Explosion():
 		elif path[0] == 'open'   and path[1] == 'closed': return '2-way hz'
 		elif path[0] == 'closed' and path[1] == 'open':   return '2-way vt'
 
-	def isInExplArea(self, bomb):
+	def isInExplArea(self, x, y):
 		for blast in self.area:
-			if blast[0] < bomb.x <= blast[0]+blast[2] \
-				and blast[1] < bomb.y <= blast[1]+blast[3]:
+			if blast[0] < x <= blast[0]+blast[2] \
+				and blast[1] < y <= blast[1]+blast[3]:
 				return True
 
 	def findNearbyBombs(self):
-		return [bomb for bomb in Bomb if self.isInExplArea(bomb)]
+		return [bomb for bomb in Bomb if self.isInExplArea(bomb.x,bomb.y)]
 
 	def drawExplosion(self):
 		for i in range(2): pygame.draw.rect(window, ORANGE, self.area[i])

@@ -10,14 +10,13 @@ import pygame, sys, os
 from pygame.locals import *
 from pprint import pprint
 
-# Game constants and global variables
+# Game constants
 debug = True
 b = 40 # pixel width for one block
 NB_ACR = 8 # number blocks across -- should be an even number
 NB_DOWN = 6 # number blocks down -- should be an even number
 game_width = b * (NB_ACR * 2 + 1)
 game_height = b * (NB_DOWN * 2 + 1)
-
 #  Colors
 BLACK = (0,0,0)
 BLUE = (0,0,255)
@@ -25,6 +24,9 @@ WHITE = (255,255,255)
 DARK_GREY = (140,140,140)
 ORANGE = (255,108,10)
 BG_COLOR = BLACK
+PINK = (255,51,102)
+GREEN = (51,255,102)
+YELLOW = (204,255,51)
 
 class IterRegistry(type):
 	def __iter__(cls):
@@ -36,8 +38,11 @@ class Game():
 	def __init__(self):
 		pygame.init()
 		pygame.display.set_caption("Bomberman by Dillon Forrest")
-		self.bbman = Bomberman()
-		self.arena = Arena(self.bbman)
+		self.arena = Arena()
+		self.bbman = Bomberman(self.arena, WHITE, self.arena.start0)
+		self.enemy1 = Bomberman(self.arena, PINK, self.arena.start1)
+		self.enemy2 = Bomberman(self.arena, GREEN, self.arena.start2)
+		self.enemy3 = Bomberman(self.arena, YELLOW, self.arena.start3)
 
 	def mainLoop(self):
 		while True:
@@ -67,7 +72,8 @@ class Game():
 		window.fill(BG_COLOR)
 		window.lock()
 		self.arena.drawArena()
-		self.bbman.drawBomberman()
+		for bomberman in Bomberman:
+			bomberman.drawBomberman()
 		for bomb in Bomb:
 			if bomb.life > 0:	bomb.drawBomb()
 		for explosion in Explosion:
@@ -79,33 +85,80 @@ class Bomberman():
 	__metaclass__ = IterRegistry
 	_registry = []
 
-	def __init__(self, arena):
+	def __init__(self, arena, color, start_pos):
 		self._registry.append(self)
-		self.radius = 10
-		self.x, self.y = self.radius, self.radius # initial position
+		self.radius = arena.bbmanradius
+		self.x, self.y = start_pos # initial position
 		self.w = 2*self.radius
 		self.speed = 3 # I think this is pixels per frame
 		self.bombs = 0
 		self.bomb_max = 3
 		self.bomb_reset = 0
 		self.reset_amt = 10 # frames
+		self.color = color
 
-	def isMoveOkay(self, move, arena):
+	def isInBounds(self, move):
+		r = self.radius
+		for m, border in ( (move[0],game_width-r),(move[1],game_height-r) ):
+			if m < r or m > border: return False
+		return True
+
+	def isInAisle(self, new, old, aisles):
+		''' new = proposed new move; old = old move of opposite direction '''
+		for aisle in aisles:
+			if aisle[0] <= old <= aisle[1]: 
+				return True
+		return False
+
+	def isHittingBlock(self, new, blocks):
+		return not any([block[0] <= new <= block[1] for block in blocks])
+		
+	def isMoveOkay(self, newmove, oldmove, arena):
+		r = self.radius
+		if not self.isInBounds(newmove): return False
+		if newmove[1] == oldmove[1]: data = { 
+			'new':newmove[0], 'constant':newmove[1], 'aisles':arena.vt_aisles,
+			'blocks':arena.hz_aisles }
+		else: data = {
+			'new':newmove[1], 'constant':newmove[0], 'aisles':arena.hz_aisles,
+			'blocks':arena.vt_aisles }
+		if not self.isInAisle(data['new'],data['constant'],data['aisles']): 
+			if self.isHittingBlock(data['new'],data['blocks']): 
+				return False
+			else:
+				return True
+		else: return True
+
+	def LALAisMoveOkay(self, move, arena):
 		w, r = self.w, self.radius
 		hz, vt = arena.hz_aisles, arena.vt_aisles
-		for new,game,aisles,rev_aisles,rev_new in ( 
+		print move[1], r, game_height-r
+		for new, game, aisles, revr_aisles, revr_new in ( 
 			(move[0], game_width, hz, vt, move[1]),	
 			(move[1], game_height, vt, hz, move[0]) ):
+			print new, game
 			if  new < r or new > game-r: return False
 			for aisle in aisles:
 				if aisle[0] <= new <= aisle[1]-w: return True
 				else:
-					for aisle in rev_aisles:
-						if aisle[0] <= rev_new <= aisle[1]-w: return True
+					for aisle in revr_aisles:
+						if aisle[0] <= revr_new <= aisle[1]-w: return True
 			else: return False
 	
-	# how can I make this function prettier??  o_O
 	def processKeyboardEvents(self, arena):
+		keys = pygame.key.get_pressed()
+		x, y, s = self.x, self.y, self.speed
+		if keys[pygame.K_SPACE]: self.dropBomb(arena)
+		elif keys[pygame.K_UP]    and self.isMoveOkay( (x,y-s), (x,y), arena ):
+			self.y -= s
+		elif keys[pygame.K_DOWN]  and self.isMoveOkay( (x,y+s), (x,y), arena ):
+			self.y += s
+		elif keys[pygame.K_LEFT]  and self.isMoveOkay( (x-s,y), (x,y), arena ):
+			self.x -= s
+		elif keys[pygame.K_RIGHT] and self.isMoveOkay( (x+s,y), (x,y), arena ):
+			self.x += s
+	# how can I make this function prettier??  o_O
+	def LALAprocessKeyboardEvents(self, arena): 
 		keys = pygame.key.get_pressed()
 		x, y, s = self.x, self.y, self.speed
 		if keys[pygame.K_SPACE]: self.dropBomb(arena)
@@ -125,7 +178,7 @@ class Bomberman():
 				self.bomb_reset = self.reset_amt
 
 	def drawBomberman(self):
-		pygame.draw.circle(window, WHITE, (self.x, self.y),	self.radius)
+		pygame.draw.circle(window, self.color, (self.x, self.y),	self.radius)
 
 class Bomb():
 	__metaclass__ = IterRegistry
@@ -207,15 +260,22 @@ class Explosion():
 				Explosion(bomb, self.arena)
 
 class Arena():
-	def __init__(self, bbman):
+	def __init__(self):
 		self.array = [ [ ( b*(2*x+1),b*(2*y+1) ) for y in range(NB_DOWN) ] \
 			for x in range(NB_ACR) ]
-		r = bbman.radius
-		self.hz_aisles = [ ( 2*x*b+r,(2*x+1)*b+r ) for x in range(NB_ACR+1) ]
-		self.vt_aisles = [ ( 2*y*b+r,(2*y+1)*b+r ) for y in range(NB_ACR+1) ]
+		self.hz_blocks = [ ( b*(2*x+1),b*(2*x+2) ) for x in range(NB_ACR) ]
+		self.vt_blocks = [ ( b*(2*y+1),b*(2*y+2) ) for y in range(NB_DOWN) ]
+		self.bbmanradius = 10 # pixel radius of bomberman and enemies
+		r = self.bbmanradius
+		self.hz_aisles = [ ( 2*x*b+r,(2*x+1)*b-r ) for x in range(NB_ACR+1) ]
+		self.vt_aisles = [ ( 2*y*b+r,(2*y+1)*b-r ) for y in range(NB_ACR+1) ]
 		# self.bombi = ( start of tile, end of tile, index of tile )
 		self.bombx = [ ( b*x, b*(x+1) ) for x in range(2*NB_ACR + 1) ]
 		self.bomby = [ ( b*y, b*(y+1) ) for y in range(2*NB_DOWN + 1) ]
+		self.start0 = ( r, r)
+		self.start1 = ( r, game_height-r)
+		self.start2 = ( game_width-r, r)
+		self.start3 = ( game_width-r, game_height-r)
 	
 	def drawArena(self):
 		for x in range(NB_ACR):

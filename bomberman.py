@@ -9,6 +9,7 @@ Made in the interest of improving my programming and as an ode to Bomberman.
 import pygame, sys, os, random
 from pygame.locals import *
 from pprint import pprint
+from random import randint
 
 # Game constants
 debug = True
@@ -42,8 +43,8 @@ class Game():
 		self.players = [
 			Bomberman(self.arena, WHITE, self.arena.start0),
 			AIBot(self.arena, PINK, self.arena.start1),
-			AIBot(self.arena, GREEN, self.arena.start2),
-			AIBot(self.arena, YELLOW, self.arena.start3),
+			#AIBot(self.arena, GREEN, self.arena.start2),
+			#AIBot(self.arena, YELLOW, self.arena.start3),
 		]
 
 	def mainLoop(self):
@@ -193,19 +194,25 @@ class AIBot(Bomberman):
 	def __init__(self, arena, color, pos):
 		Bomberman.__init__(self, arena, color, pos)
 		self.direction = random.choice(self.movedict)
+		self.pcount = 0
+		self.path = None
+		self.clock = 100
 		
 	def findGridPos(self):
 		return self.x/b + 1, self.y/b + 1
 
-	def move(self, destination):
+	def findPath(self, destination):
+		print "this is da destination!!1", destination
 		pos = self.findGridPos()
 		graph = self.grid_to_adjdict()
 		dead = []
 		explore = {pos: 0}
 		path = {pos: [pos]}
-		while destination not in explore.keys():
+		while destination not in explore:
 			minn, minv = None, 10000 #10000 is an approximation of infinity
 			
+			print("EXPLORE")
+			pprint(explore)
 			for node in explore:
 				cost = explore[node]
 				if cost < minv:
@@ -226,11 +233,16 @@ class AIBot(Bomberman):
 				dead.append(minn)
 		return path[destination]
 
-		#for x in self.arena.grid
-		#	for y in x 
+	def LALAmove(self, path):
+		pixelpath = [(node[0]*b+b/2,node[1]*b+b/2) for node in path]
+		if (self.x,self.y) not in pixelpath:
+			self.x, self.y = pixelpath[0]
+		else:
+			placement = pixelpath.count( (self.x, self.y) )
+			newplacement = pixelpath[placement + 1]
+			self.x, self.y = newplacement
+		return self.x, self.y
 
-		destx, desty = destination
-	
 	def grid_to_adjdict(self):
 		d = {}
 		grid = self.arena.grid
@@ -249,24 +261,7 @@ class AIBot(Bomberman):
 					d[(i, j)].append((i, j-1)) 
 		return d
 
-
-	def LALAgrid_to_adjdict(self):
-		d = {}
-		grid = self.arena.grid
-		for i, x in enumerate(grid[1:-1]):
-			for j, y in enumerate(x[1:-1]):
-				d[(i, j)] = []
-				if grid[i+1][j] == 0:
-					d[(i, j)].append((i+1, j)) 
-				if grid[i][j+1] == 0:
-					d[(i, j)].append((i, j+1)) 
-				if grid[i-1][j] == 0:
-					d[(i, j)].append((i-1, j)) 
-				if grid[i][j-1] == 0:
-					d[(i, j)].append((i, j-1)) 
-		return d
-
-	def update(self):
+	def LALAupdate(self):
 		if random.randint(1, 100) == 100:
 			self.direction = random.choice(self.movedict)
 		if random.randint(1, 100) == 100:
@@ -285,6 +280,27 @@ class AIBot(Bomberman):
 		for expl in Explosion:
 			if expl.isInExplArea(self.x, self.y):
 				self.direction = random.choice(self.movedict)
+
+	def update(self):
+		if self.path is None:
+			dest = (randint(1, len(self.arena.grid)-2), 
+				randint(1, len(self.arena.grid)-2))
+			while dest[0] % 2  == 0 and dest[1] % 2 == 0:
+				dest = (randint(1, len(self.arena.grid)-2), 
+					randint(1, len(self.arena.grid)-2))
+			#sys.exit()
+			self.path = self.findPath(dest)
+			self.path = [(node[0]*b-b/2,node[1]*b-b/2) for node in self.path]
+			pprint(self.path)
+			self.pcount = 0
+		if self.clock == 0:
+			self.x, self.y = self.path[self.pcount]
+			self.pcount += 1
+			if self.pcount == len(self.path):
+				self.path = None
+			self.clock = 100
+		self.clock -= 1
+
 
 class Bomb():
 	__metaclass__ = IterRegistry

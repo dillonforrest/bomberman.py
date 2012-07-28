@@ -188,15 +188,84 @@ class Bomberman():
 
 class AIBot(Bomberman):
 
-	#movedict = {'nothing': (0,0), 'north': (0,-1), 'east': (1,0),
-	#	'south': (0,1), 'west': (-1,0) }
-
 	movedict = [(0,-1),(1,0),(0,1),(-1,0)]
 
 	def __init__(self, arena, color, pos):
 		Bomberman.__init__(self, arena, color, pos)
 		self.direction = random.choice(self.movedict)
 		
+	def findGridPos(self):
+		return self.x/b + 1, self.y/b + 1
+
+	def move(self, destination):
+		pos = self.findGridPos()
+		graph = self.grid_to_adjdict()
+		dead = []
+		explore = {pos: 0}
+		path = {pos: [pos]}
+		while destination not in explore.keys():
+			minn, minv = None, 10000 #10000 is an approximation of infinity
+			
+			for node in explore:
+				cost = explore[node]
+				if cost < minv:
+					minn = node
+					minv = cost
+			for neighbor in graph[minn]:
+				if not (neighbor in dead or neighbor in explore):
+					explore[neighbor] = minv + 1
+					path[neighbor] = path[minn] + [neighbor]
+					break
+			kill = True
+			for neighbor in graph[minn]:
+				if not (neighbor in dead  or neighbor in explore):
+					kill = False
+					break
+			if kill:
+				del explore[minn]
+				dead.append(minn)
+		return path[destination]
+
+		#for x in self.arena.grid
+		#	for y in x 
+
+		destx, desty = destination
+	
+	def grid_to_adjdict(self):
+		d = {}
+		grid = self.arena.grid
+		for i_, x in enumerate(grid[1:-1]):
+			i = i_ + 1
+			for j_, y in enumerate(x[1:-1]):
+				j = j_ + 1
+				d[(i, j)] = []
+				if grid[i+1][j] == 0:
+					d[(i, j)].append((i+1, j)) 
+				if grid[i][j+1] == 0:
+					d[(i, j)].append((i, j+1)) 
+				if grid[i-1][j] == 0:
+					d[(i, j)].append((i-1, j)) 
+				if grid[i][j-1] == 0:
+					d[(i, j)].append((i, j-1)) 
+		return d
+
+
+	def LALAgrid_to_adjdict(self):
+		d = {}
+		grid = self.arena.grid
+		for i, x in enumerate(grid[1:-1]):
+			for j, y in enumerate(x[1:-1]):
+				d[(i, j)] = []
+				if grid[i+1][j] == 0:
+					d[(i, j)].append((i+1, j)) 
+				if grid[i][j+1] == 0:
+					d[(i, j)].append((i, j+1)) 
+				if grid[i-1][j] == 0:
+					d[(i, j)].append((i-1, j)) 
+				if grid[i][j-1] == 0:
+					d[(i, j)].append((i, j-1)) 
+		return d
+
 	def update(self):
 		if random.randint(1, 100) == 100:
 			self.direction = random.choice(self.movedict)
@@ -313,7 +382,18 @@ class Arena():
 		self.start1 = ( r, game_height-r)
 		self.start2 = ( game_width-r, r)
 		self.start3 = ( game_width-r, game_height-r)
-	
+		self.grid = [ [ 0 for y in range(game_height/b) ] \
+			for x in range(game_width/b) ]
+		for i, x in enumerate(self.grid):
+			for j, y in enumerate(x):
+				if i % 2 == 1 and j % 2 == 1:
+					self.grid[i][j] = 1
+		newgrid = [ [1 for y in range(game_height/b + 2)] ]
+		for x in self.grid:
+			newgrid.append( [1] + x + [1] )
+		newgrid.append( [1 for y in range(game_height/b + 2)] )
+		self.grid = newgrid
+
 	def drawArena(self):
 		for x in range(NB_ACR):
 			for y in range(NB_DOWN):
